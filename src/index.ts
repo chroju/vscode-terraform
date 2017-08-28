@@ -156,6 +156,15 @@ class Index {
 
         let reference = index.References[targetId];
         let target = this.findTargetLocation(targetId);
+        if (target === undefined) {
+          reference.Locations.forEach((l) => {
+            index.Errors.push({
+              Message: "Cannot find reference",
+              Location: l
+            });
+          });
+          continue;
+        }
         let references = reference.Locations.map((r): Reference => {
           return {
             source: { uri: uri, range: Parser.toRange(r) },
