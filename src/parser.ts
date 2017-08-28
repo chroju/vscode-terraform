@@ -47,20 +47,20 @@ export namespace Parser {
     return <IndexResult>JSON.parse(json);
   }
 
-  export function locationToRange(location: Location): vscode.Range {
-    const magic = Number.MAX_VALUE;
+  export function toRange(location: Location, length?: number): vscode.Range {
+    const endColumn = length === undefined ? Number.MAX_VALUE : (location.Column - 1 + length);
     return new vscode.Range(location.Line - 1, location.Column - 1,
-      location.Line - 1, magic);
+      location.Line - 1, endColumn);
   }
 
-  export function locationToLocation(location: Location, uri?: vscode.Uri): vscode.Location {
-    if (uri === undefined) {
-      uri = vscode.Uri.file(location.Filename);
+  export function toLocation(location: Location, options: { uri?: vscode.Uri, length?: number } = {}): vscode.Location {
+    if (options.uri === undefined) {
+      options.uri = vscode.Uri.file(location.Filename);
     }
 
     return {
-      uri: uri,
-      range: locationToRange(location)
+      uri: options.uri,
+      range: toRange(location, options.length)
     }
   }
 
