@@ -6,8 +6,6 @@ variable "region" {
   default = "us-east-1"
 }
 
-
-
 terraform {
 
 }
@@ -34,6 +32,9 @@ variable "aws_test_var" {
     ]EOF
 }
 
+/* sdfsd
+ documentation
+ */
 resource "aws_s3_bucket" "agent_bucket" {
   bucket   = "${var.stage_test}-${var.region.test}-${var.stage}mybucket"
   acl      = "private"
@@ -59,5 +60,9 @@ HEREDOC
 }
 
 output "iam_user_agent" {
-  value = "smurf"
+  value = "${aws_s3_bucket.agent_bucket.property}"
+}
+
+provider "aws" {
+  alias = "cool"
 }
