@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 
 import { Parser } from './parser';
 
 import { getConfiguration } from './configuration';
+import { promptForMissingTool } from './missingtool';
 
 export function process(text: string): Promise<Parser.IndexResult> {
   const cfg = getConfiguration();
@@ -15,8 +16,9 @@ export function process(text: string): Promise<Parser.IndexResult> {
       encoding: "utf8",
       cwd: vscode.workspace.rootPath
     }, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
+      if (error && (<any>error).code === 'ENOENT') {
+        promptForMissingTool('terraform-index');
+        resolve(null);
       } else {
         try {
           resolve(Parser.parseIndex(stdout));
