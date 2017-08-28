@@ -32,6 +32,7 @@ export namespace Parser {
 
   export interface Reference {
     Name: string;
+    Type: string;
     Locations: Location[];
   }
 

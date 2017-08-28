@@ -155,7 +155,7 @@ class Index {
         }
 
         let reference = index.References[targetId];
-        let target = this.findTargetLocation(targetId);
+        let target = this.findTargetLocation(reference.Name, reference.Type);
         if (target === undefined) {
           reference.Locations.forEach((l) => {
             index.Errors.push({
@@ -192,7 +192,7 @@ class Index {
     return this._variables.has(id) || this._outputs.has(id);
   }
 
-  private findTargetLocation(id: string): vscode.Location {
+  private findTargetLocation(id: string, type: string): vscode.Location {
     return this._variables.get(id) || this._outputs.get(id);
   }
 
