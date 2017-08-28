@@ -30,7 +30,9 @@ export function liveIndex(e: vscode.TextDocumentChangeEvent) {
   runner = setTimeout(function () {
     process(e.document.getText())
       .then((index) => {
-        errorDiagnosticCollection.set(e.document.uri, index.Errors.map(createDiagnostic));
+        if (index != null) {
+          errorDiagnosticCollection.set(e.document.uri, index.Errors.map(createDiagnostic));
+        }
         runner = null;
       })
       .catch((err) => {

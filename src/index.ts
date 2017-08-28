@@ -41,7 +41,11 @@ class Index {
     }
 
     process(doc.getText())
-      .then((result) => this.update(doc.uri, result))
+      .then((result) => {
+        if (result != null) {
+          this.update(doc.uri, result)
+        }
+      })
       .catch((error) => console.log("Could not parse:", error));
   }
 
