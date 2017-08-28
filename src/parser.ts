@@ -37,6 +37,7 @@ export namespace Parser {
   }
 
   export interface IndexResult {
+    Version: string;
     Errors: ParseError[];
     Variables: Variable[];
     Resources: Resource[];
@@ -45,7 +46,23 @@ export namespace Parser {
   }
 
   export function parseIndex(json: string): IndexResult {
-    return <IndexResult>JSON.parse(json);
+    let parsed = <any>JSON.parse(json);
+    if (!("Version" in parsed)) {
+      parsed.Version = "0.0.0";
+    }
+
+    const supported = ["0.0.0", "1.0.0", "1.1.0"];
+    if (supported.indexOf(parsed.Version) == -1) {
+      throw new Error(`Unsupported index version '${parsed.Version}', supported versions: ${supported.join(", ")}`);
+    }
+
+    let result = <IndexResult>parsed;
+    for (let reference in result.References) {
+      if ("Type" in result.References[reference])
+        continue;
+      result.References[reference].Type = "variable";
+    }
+    return result;
   }
 
   export function toRange(location: Location, length?: number): vscode.Range {
