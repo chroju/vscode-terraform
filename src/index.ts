@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 
 import { Parser } from './parser';
 import { process } from './process';
+import { first } from './helpers';
 
 import { getConfiguration } from './configuration';
-import { errorDiagnosticCollection } from './extension';
+import { errorDiagnosticCollection, outputChannel } from './extension';
 import {
   DefinitionProvider, ReferenceProvider, CompletionProvider,
   DocumentSymbolProvider, WorkspaceSymbolProvider,
@@ -21,10 +22,61 @@ class Reference {
   target: vscode.Location;
 }
 
+export enum SymbolType {
+  Variable,
+  Resource,
+  Data,
+  Module,
+  Output,
+  Provider,
+  Unknown
+}
+
+export class Symbol extends vscode.SymbolInformation {
+  type: SymbolType;
+
+  constructor(uri: vscode.Uri, type: SymbolType, section: Parser.TypedSection | Parser.UntypedSection) {
+    super(section.Name, Symbol.toKind(type), Parser.toRange(section.Location), uri);
+    this.type = type;
+  }
+
+  matchingType(types?: SymbolType[]) : boolean {
+    if (!types) return true;
+
+    return types.indexOf(this.type) != -1;
+  }
+
+  public static toKind(type: SymbolType): vscode.SymbolKind {
+    switch(type) {
+      case SymbolType.Variable: return vscode.SymbolKind.Variable;
+      case SymbolType.Resource: return vscode.SymbolKind.Object;
+      case SymbolType.Data: return vscode.SymbolKind.Constant;
+      case SymbolType.Module: return vscode.SymbolKind.Module;
+      case SymbolType.Output: return vscode.SymbolKind.Property;
+      case SymbolType.Provider: return vscode.SymbolKind.Namespace;
+    }
+
+    return vscode.SymbolKind.Null;
+  }
+
+  public static toType(type: string): SymbolType {
+    switch(type.toLowerCase()) {
+      case "variable": return SymbolType.Variable;
+      case "resource": return SymbolType.Resource;
+      case "data":     return SymbolType.Data;
+      case "module":   return SymbolType.Module;
+      case "output":   return SymbolType.Output;
+      case "provider": return SymbolType.Provider;
+    }
+
+    return SymbolType.Unknown;
+  }
+}
+
 class Index {
   private _byUri = new Map<string, Parser.IndexResult>();
-  private _variables = new Map<string, vscode.Location>();
-  private _outputs = new Map<string, vscode.Location>();
+  private _symbolsByUri = new Map<string, Symbol[]>();
+  private _symbols = new Map<string, Symbol[]>();
   private _references = new Map<string, Reference[]>();
   private _referencesById = new Map<string, vscode.Location[]>();
 
@@ -36,7 +88,7 @@ class Index {
 
   updateDocument(doc: vscode.TextDocument) {
     if (doc.languageId != "terraform" || doc.isDirty) {
-      console.log("Ignoring document: ", doc.uri.toString);
+      outputChannel.appendLine(`indexer: Ignoring document: ${doc.uri} (languageId: ${doc.languageId}, isDirty: ${doc.isDirty}`);
       return;
     }
 
@@ -46,7 +98,7 @@ class Index {
           this.update(doc.uri, result)
         }
       })
-      .catch((error) => console.log("Could not parse:", error));
+      .catch((error) => outputChannel.appendLine(`indexer: Could not parse: ${doc.uri}: ${error}`));
   }
 
   findDefinition(doc: vscode.TextDocument, pos: vscode.Position): (vscode.Location | null) {
@@ -74,70 +126,62 @@ class Index {
   deleteUri(uri: vscode.Uri) {
     this._byUri.delete(uri.toString());
 
-    this.rebuildVariables();
+    this.rebuildSymbols();
     this.rebuildReferences();
     errorDiagnosticCollection.delete(uri);
   }
 
-  getVariables(match?: string): string[] {
-    return [...this._variables.keys()].filter((v) => v.match(match));
-  }
-
-  getOutputs(match?: string): string[] {
-    return [...this._outputs.keys()].filter((o) => o.match(match));
-  }
-
-  getDocumentSymbols(uri: vscode.Uri, match?: string): vscode.SymbolInformation[] {
-    let result = this._byUri.get(uri.toString());
+  getDocumentSymbols(uri: vscode.Uri, match?: string): Symbol[] {
+    let result = this._symbolsByUri.get(uri.toString());
     if (result === undefined) {
       return [];
     }
-
-    return result.Variables.filter((v) => v.Name.match(match)).map((v) => {
-      return new vscode.SymbolInformation(v.Name, vscode.SymbolKind.Variable, Parser.toRange(v.Location), uri);
-    })
-      .concat(result.Resources.filter((r) => r.Name.match(match) || r.Type.match(match)).map((r) => {
-        return new vscode.SymbolInformation(r.Name, vscode.SymbolKind.Interface, Parser.toRange(r.Location), uri, r.Type);
-      }))
-      .concat(result.Outputs.filter((o) => o.Name.match(match)).map((o) => {
-        return new vscode.SymbolInformation(o.Name, vscode.SymbolKind.Property, Parser.toRange(o.Location), uri);
-      }));
+    return result;
   }
 
-  getSymbols(match: string): vscode.SymbolInformation[] {
-    let symbols = [] as vscode.SymbolInformation[];
-    for (let uri of this._byUri.keys()) {
-      symbols.push(...this.getDocumentSymbols(vscode.Uri.parse(uri), match));
+  * getSymbols(match: string, type?: SymbolType[]): IterableIterator<Symbol> {
+    for (let symbols of this._symbols.values()) {
+      for (let symbol of symbols) {
+        if (symbol.name.match(match) && symbol.matchingType(type))
+          yield symbol;
+      }
     }
-    return symbols;
   }
 
   private update(uri: vscode.Uri, result: Parser.IndexResult) {
     console.log("Updating index for ", uri.toString());
     this._byUri.set(uri.toString(), result);
 
-    this.rebuildVariables();
-    this.rebuildOutputs();
-    this.rebuildReferences();
-    this.updateDiagnostics(uri, result);
+    this.rebuildSymbols();
   }
 
-  private rebuildVariables() {
-    this._variables.clear();
+  private rebuildSymbols() {
+    this._symbols.clear();
 
-    for (let [uri, index] of this._byUri) {
-      for (let variable of index.Variables) {
-        this._variables.set(variable.Name, Parser.toLocation(variable.Location, { uri: vscode.Uri.parse(uri) }));
-      }
+    for (let [uriString, index] of this._byUri) {
+      let uri = vscode.Uri.parse(uriString);
+
+      let symbols = [];
+      symbols.push( ...index.Variables.map((v) => new Symbol(uri, SymbolType.Variable, v)) );
+      symbols.push( ...index.DefaultProviders.map((d) => new Symbol(uri, SymbolType.Provider, d)) );
+      symbols.push( ...index.Providers.map((p) => new Symbol(uri, SymbolType.Provider, p)) );
+      symbols.push( ...index.Resources.map((r) => new Symbol(uri, SymbolType.Resource, r)) );
+      symbols.push( ...index.DataResources.map((d) => new Symbol(uri, SymbolType.Data, d)) );
+      symbols.push( ...index.Modules.map((m) => new Symbol(uri, SymbolType.Module, m)) );
+      symbols.push( ...index.Outputs.map((o) => new Symbol(uri, SymbolType.Output, o)) );
+
+      this.addSymbols(symbols);
+
+      this._symbolsByUri.set(uriString, symbols);
     }
   }
 
-  private rebuildOutputs() {
-    this._outputs.clear();
-
-    for (let [uri, index] of this._byUri) {
-      for (let output of index.Outputs) {
-        this._outputs.set(output.Name, Parser.toLocation(output.Location, { uri: vscode.Uri.parse(uri) }));
+  private addSymbols(symbols: Symbol[]) {
+    for (let symbol of symbols) {
+      if (this._symbols.has(symbol.name)) {
+        this._symbols.get(symbol.name).push(symbol);
+      } else {
+        this._symbols.set(symbol.name, new Array<Symbol>(symbol));
       }
     }
   }
@@ -155,7 +199,7 @@ class Index {
         }
 
         let reference = index.References[targetId];
-        let target = this.findTargetLocation(reference.Name, reference.Type);
+        let target = this.findTargetLocation(reference.Name, Symbol.toType(reference.Type));
         if (target === undefined) {
           reference.Locations.forEach((l) => {
             index.Errors.push({
@@ -189,11 +233,24 @@ class Index {
   }
 
   private validTarget(id: string): boolean {
-    return this._variables.has(id) || this._outputs.has(id);
+    return this._symbols.has(id);
   }
 
-  private findTargetLocation(id: string, type: string): vscode.Location {
-    return this._variables.get(id) || this._outputs.get(id);
+  private findTargetLocation(id: string, type?: SymbolType): vscode.Location {
+    if (!this._symbols.has(id)) {
+      return null;
+    }
+
+    let symbols = this._symbols.get(id);
+    if (symbols.length == 0) {
+      return null;
+    }
+
+    let matching = symbols.filter((s) => s.type == type);
+    if (matching.length == 0) {
+      return null;
+    }
+    return matching[0].location;
   }
 
   private updateDiagnostics(uri: vscode.Uri, result: Parser.IndexResult) {

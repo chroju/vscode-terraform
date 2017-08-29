@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
-import { index } from './index';
+import { index, SymbolType } from './index';
+import { toCompletionKind } from './helpers';
 
 export class DefinitionProvider implements vscode.DefinitionProvider {
   provideDefinition(document: vscode.TextDocument, position: vscode.Position): vscode.Location {
@@ -17,21 +18,21 @@ export class ReferenceProvider implements vscode.ReferenceProvider {
 
 export class CompletionProvider implements vscode.CompletionItemProvider {
   private getVariables(position: vscode.Position, includePrefix: boolean, match?: string): vscode.CompletionItem[] {
-    return index.getVariables(match).map((v) => {
-      let item = new vscode.CompletionItem(v);
-      item.kind = vscode.CompletionItemKind.Variable;
+    return [...index.getSymbols(match, [SymbolType.Variable])].map((s) => {
+      let item = new vscode.CompletionItem(s.name);
+      item.kind = toCompletionKind(s.kind);
       if (includePrefix) {
         let range = new vscode.Range(position, position);
-        item.textEdit = new vscode.TextEdit(range, `var.${v}`);
+        item.textEdit = new vscode.TextEdit(range, `var.${s.name}`);
       }
       return item;
     });
   }
 
   private getOutputs(match?: string): vscode.CompletionItem[] {
-    return index.getOutputs(match).map((o) => {
-      let item = new vscode.CompletionItem(o);
-      item.kind = vscode.CompletionItemKind.Property;
+    return [...index.getSymbols(match, [SymbolType.Output])].map((o) => {
+      let item = new vscode.CompletionItem(o.name);
+      item.kind = toCompletionKind(o.kind);
       return item;
     });
   }
@@ -60,7 +61,7 @@ export class DocumentSymbolProvider implements vscode.DocumentSymbolProvider {
 
 export class WorkspaceSymbolProvider implements vscode.WorkspaceSymbolProvider {
   provideWorkspaceSymbols(query: string): vscode.SymbolInformation[] {
-    return index.getSymbols(query);
+    return [...index.getSymbols(query)];
   }
 }
 

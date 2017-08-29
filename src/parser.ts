@@ -14,19 +14,14 @@ export namespace Parser {
     Location: Location;
   }
 
-  export interface Variable {
+  export interface UntypedSection {
     Name: string;
     Location: Location;
   }
 
-  export interface Resource {
+  export interface TypedSection {
     Name: string;
     Type: string;
-    Location: Location;
-  }
-
-  export interface Output {
-    Name: string;
     Location: Location;
   }
 
@@ -39,9 +34,13 @@ export namespace Parser {
   export interface IndexResult {
     Version: string;
     Errors: ParseError[];
-    Variables: Variable[];
-    Resources: Resource[];
-    Outputs: Output[];
+    Variables: UntypedSection[];
+    DefaultProviders: UntypedSection[];
+    Providers: TypedSection[];
+    Resources: TypedSection[];
+    DataResources: TypedSection[];
+    Modules: UntypedSection[];
+    Outputs: UntypedSection[];
     References: { [targetId: string]: Reference };
   }
 
@@ -51,7 +50,7 @@ export namespace Parser {
       parsed.Version = "0.0.0";
     }
 
-    const supported = ["0.0.0", "1.0.0", "1.1.0"];
+    const supported = ["0.0.0", "1.0.0", "1.1.0", "1.2.0"];
     if (supported.indexOf(parsed.Version) == -1) {
       throw new Error(`Unsupported index version '${parsed.Version}', supported versions: ${supported.join(", ")}`);
     }
