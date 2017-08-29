@@ -7,3 +7,11 @@ export function isTerraformDocument(document : vscode.TextDocument) : boolean {
 
   return (document.fileName.endsWith('.tf') || document.fileName.endsWith('.tfvars'));
 }
+
+export function first(sequence: any[], result: any = null) : any {
+  if (sequence.length > 0) {
+    return sequence[0];
+  }
+
+  return result;
+}
