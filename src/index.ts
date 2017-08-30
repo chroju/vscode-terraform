@@ -6,11 +6,7 @@ import { first } from './helpers';
 
 import { getConfiguration } from './configuration';
 import { errorDiagnosticCollection, outputChannel } from './extension';
-import {
-  DefinitionProvider, ReferenceProvider, CompletionProvider,
-  DocumentSymbolProvider, WorkspaceSymbolProvider,
-  RenameProvider
-} from './providers';
+import { registerProviders } from './providers';
 
 export function createDiagnostic(error: Parser.ParseError) {
   let range = Parser.toRange(error.Location);
@@ -296,10 +292,5 @@ export function initializeIndex(ctx: vscode.ExtensionContext) {
     });
 
   // register providers which depend on index
-  ctx.subscriptions.push(vscode.languages.registerDefinitionProvider("terraform", new DefinitionProvider));
-  ctx.subscriptions.push(vscode.languages.registerReferenceProvider("terraform", new ReferenceProvider));
-  ctx.subscriptions.push(vscode.languages.registerCompletionItemProvider("terraform", new CompletionProvider, '.', '\"'));
-  ctx.subscriptions.push(vscode.languages.registerDocumentSymbolProvider("terraform", new DocumentSymbolProvider));
-  ctx.subscriptions.push(vscode.languages.registerWorkspaceSymbolProvider(new WorkspaceSymbolProvider));
-  ctx.subscriptions.push(vscode.languages.registerRenameProvider("terraform", new RenameProvider));
+  registerProviders(ctx);
 }
