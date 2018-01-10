@@ -64,14 +64,48 @@
         "path": "./syntaxes/terraform.json"
       }
     ],
+    "configurationDefaults": {
+      "[terraform]": {
+        "editor.formatOnSave": true
+      }
+    },
     "configuration": {
       "type": "object",
       "title": "Terraform configuration",
       "properties": {
-        "terraform.format.enable": {
+        "terraform.format": {
+          "type": "object",
+          "description": "Formatting settings",
+          "properties": {
+            "enable": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable/disable default Terraform formatter"
+            },
+            "ignoreExtensions": {
+              "type": "array",
+              "default": [],
+              "description": "List of extensions to not format for manually and automatically invoked formatting operations",
+              "items": {
+                "type": "string",
+                "description": "File extension"
+              }
+            },
+            "ignoreExtensionsOnSave": {
+              "type": "array",
+              "default": [],
+              "description": "List of extensions to not format during formatOnSave (includes `terraform.format.ignoreExtensions`)",
+              "items": {
+                "type": "string",
+                "description": "File extension"
+              }
+            }
+          }
+        },
+        "terraform.formatVarsOnSave": {
           "type": "boolean",
           "default": true,
-          "description": "Enable/disable default Terraform formatter"
+          "description": "Controls whether .tfvars files should be included formatted during formatOnSave. This setting is deprecated, consider using `terraform.format.ignoreExtensionsOnSave` instead."
         },
         "terraform.path": {
           "type": "string",
@@ -148,5 +182,8 @@
     "tslint": "^5.7.0",
     "typescript": "^2.0.3",
     "vscode": "^1.1.10"
+  },
+  "dependencies": {
+    "diffparser": "^2.0.0"
   }
 }
